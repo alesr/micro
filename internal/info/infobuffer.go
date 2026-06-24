@@ -140,12 +140,14 @@ func (i *InfoBuf) DonePrompt(canceled bool) {
 	i.HasYN = false
 	i.HasGutter = false
 	if !hadYN {
-		if i.PromptCallback != nil {
+		cb := i.PromptCallback
+		i.PromptCallback = nil
+		if cb != nil {
 			if canceled {
 				i.Replace(i.Start(), i.End(), "")
 				h := i.History[i.PromptType]
 				i.History[i.PromptType] = h[:len(h)-1]
-				i.PromptCallback("", true)
+				cb("", true)
 			} else {
 				resp := string(i.LineBytes(0))
 				i.Replace(i.Start(), i.End(), "")
@@ -160,13 +162,16 @@ func (i *InfoBuf) DonePrompt(canceled bool) {
 					}
 				}
 
-				i.PromptCallback(resp, false)
+				cb(resp, false)
 			}
-			// i.PromptCallback = nil
 		}
 	}
-	if i.YNCallback != nil && hadYN {
-		i.YNCallback(i.YNResp, canceled)
+	if hadYN {
+		cb := i.YNCallback
+		i.YNCallback = nil
+		if cb != nil {
+			cb(i.YNResp, canceled)
+		}
 	}
 }
 

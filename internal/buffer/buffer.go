@@ -545,11 +545,16 @@ func NewBuffer(r io.Reader, size int64, path string, btype BufType, cmd Command)
 
 // CloseOpenBuffers removes all open buffers
 func CloseOpenBuffers() {
-	for i, buf := range OpenBuffers {
+	for _, buf := range OpenBuffers {
+		if buf == nil {
+			continue
+		}
 		buf.Fini()
-		OpenBuffers[i] = nil
 	}
 	OpenBuffers = OpenBuffers[:0]
+	for i := range OpenBuffers {
+		OpenBuffers[i] = nil
+	}
 }
 
 // Close removes this buffer from the list of open buffers
@@ -732,7 +737,10 @@ func (b *Buffer) WordAt(loc Loc) []byte {
 // Shared returns if there are other buffers with the same file as this buffer
 func (b *Buffer) Shared() bool {
 	for _, buf := range OpenBuffers {
-		if buf != b && buf.SharedBuffer == b.SharedBuffer {
+		if buf == nil || buf == b {
+			continue
+		}
+		if buf.SharedBuffer == b.SharedBuffer {
 			return true
 		}
 	}
