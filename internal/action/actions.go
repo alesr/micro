@@ -907,6 +907,10 @@ func (h *BufPane) OutdentSelection() bool {
 func (h *BufPane) Autocomplete() bool {
 	b := h.Buf
 
+	if b.InlineCompletion != "" {
+		return false
+	}
+
 	if h.Cursor.HasSelection() {
 		return false
 	}
@@ -944,6 +948,9 @@ func (h *BufPane) CycleAutocompleteBack() bool {
 
 // InsertTab inserts a tab or spaces
 func (h *BufPane) InsertTab() bool {
+	if h.acceptAICompletion() {
+		return true
+	}
 	b := h.Buf
 	indent := b.IndentString(util.IntOpt(b.Settings["tabsize"]))
 	tabBytes := len(indent)
@@ -1874,6 +1881,10 @@ func (h *BufPane) ToggleOverwriteMode() bool {
 
 // Escape leaves current mode
 func (h *BufPane) Escape() bool {
+	if h.Buf.InlineCompletion != "" {
+		h.dismissAICompletion()
+		return true
+	}
 	return true
 }
 
@@ -2344,5 +2355,12 @@ func (h *BufPane) RemoveAllMultiCursors() bool {
 
 // None is an action that does nothing
 func (h *BufPane) None() bool {
+	return true
+}
+
+// ManualTrigger immediately triggers AI completion (no debounce).
+// Bound to Ctrl-Space by default.
+func (h *BufPane) ManualTrigger() bool {
+	h.triggerAICompletionNow()
 	return true
 }

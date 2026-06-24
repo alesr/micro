@@ -131,7 +131,12 @@ var DefaultGlobalOnlySettings = map[string]any{
 	"sucmd":          "sudo",
 	"tabhighlight":   false,
 	"tabreverse":     true,
-	"xterm":          false,
+	"xterm":              false,
+	"aicomplete":         true,
+	"aicompleteprovider": "codestral",
+	"aicompletemodel":    "codestral-latest",
+	"aicompleteurl":      "",
+	"aicompletedebounce": float64(300),
 }
 
 // a list of settings that should never be globally modified

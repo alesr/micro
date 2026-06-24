@@ -79,6 +79,7 @@ var bufdefaults = map[string]string{
 	"Ctrl-u":         "ToggleMacro",
 	"Ctrl-j":         "PlayMacro",
 	"Insert":         "ToggleOverwriteMode",
+	"Ctrl-Space":     "ManualTrigger",
 
 	// Emacs-style keybindings
 	"Alt-f": "WordRight",

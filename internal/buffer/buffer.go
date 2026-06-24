@@ -111,6 +111,10 @@ type SharedBuffer struct {
 	// it changes based on how the buffer has changed
 	HasSuggestions bool
 
+	// InlineCompletion is ghost text suggested by an AI provider.
+	// It is drawn after the cursor and cleared on any buffer mutation.
+	InlineCompletion string
+
 	// The Highlighter struct actually performs the highlighting
 	Highlighter *highlight.Highlighter
 	// SyntaxDef represents the syntax highlighting definition being used
@@ -125,6 +129,7 @@ type SharedBuffer struct {
 
 func (b *SharedBuffer) insert(pos Loc, value []byte) {
 	b.HasSuggestions = false
+	b.InlineCompletion = ""
 	b.LineArray.insert(pos, value)
 	b.setModified()
 
@@ -134,6 +139,7 @@ func (b *SharedBuffer) insert(pos Loc, value []byte) {
 
 func (b *SharedBuffer) remove(start, end Loc) []byte {
 	b.HasSuggestions = false
+	b.InlineCompletion = ""
 	defer b.setModified()
 	defer b.MarkModified(start.Y, end.Y)
 	return b.LineArray.remove(start, end)
@@ -266,6 +272,43 @@ type Buffer struct {
 	// Insert key by default) i.e. that typing a character shall replace the
 	// character under the cursor instead of inserting a character before it.
 	OverwriteMode bool
+}
+
+func (b *Buffer) TextBeforeCursor() string {
+	c := b.GetActiveCursor()
+	n := b.LinesNum()
+	var result []byte
+	for i := 0; i < n && i < c.Y; i++ {
+		result = append(result, b.LineBytes(i)...)
+		result = append(result, '\n')
+	}
+	if c.Y < n {
+		l := b.LineBytes(c.Y)
+		if c.X < len(l) {
+			result = append(result, l[:c.X]...)
+		} else {
+			result = append(result, l...)
+		}
+	}
+	return string(result)
+}
+
+func (b *Buffer) TextAfterCursor() string {
+	c := b.GetActiveCursor()
+	n := b.LinesNum()
+	var result []byte
+	if c.Y < n {
+		l := b.LineBytes(c.Y)
+		if c.X < len(l) {
+			result = append(result, l[c.X:]...)
+		}
+		result = append(result, '\n')
+	}
+	for i := c.Y + 1; i < n; i++ {
+		result = append(result, b.LineBytes(i)...)
+		result = append(result, '\n')
+	}
+	return string(result)
 }
 
 // NewBufferFromFileWithCommand opens a new buffer with a given command
