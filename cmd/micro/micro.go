@@ -278,6 +278,9 @@ func checkBackup(name string) error {
 
 func exit(rc int) {
 	for _, b := range buffer.OpenBuffers {
+		if b == nil {
+			continue
+		}
 		if !b.Modified() {
 			b.Fini()
 		}
@@ -384,6 +387,9 @@ func main() {
 			}
 			// immediately backup all buffers with unsaved changes
 			for _, b := range buffer.OpenBuffers {
+				if b == nil {
+					continue
+				}
 				if b.Modified() {
 					b.Backup()
 				}

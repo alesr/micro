@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	codestralDefaultBaseURL = "https://codestral.mistral.ai/v1/fim/completions"
+	codestralDefaultBaseURL = "https://api.mistral.ai/v1/fim/completions"
 	codestralDefaultModel   = "codestral-latest"
 	codestralEnvKey         = "MISTRAL_API_KEY"
 )
