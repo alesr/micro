@@ -98,7 +98,7 @@ var bufdefaults = map[string]string{
 	"CtrlPageDown": "NextTab|FirstTab",
 
 	// --- Command mode ---
-	"Ctrl-o":       "CommandMode",
+	"F8":           "CommandMode",
 	// --- Splits ---
 	"Ctrl-e":       "NextSplit|FirstSplit",
 
