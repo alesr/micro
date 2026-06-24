@@ -516,6 +516,8 @@ func DoEvent() {
 		}
 	case f := <-timerChan:
 		f()
+	case f := <-action.AIResultChan:
+		f()
 	case <-sighup:
 		exit(0)
 	case <-util.Sigterm:

@@ -29,6 +29,10 @@ type BufWindow struct {
 	hasMessage       bool
 	maxLineNumLength int
 	drawDivider      bool
+
+	// Visual cursor position for ghost text rendering
+	cursorX int
+	cursorY int
 }
 
 // NewBufWindow creates a new window at a location in the screen with a width and height
@@ -372,6 +376,8 @@ func (w *BufWindow) getStyle(style tcell.Style, bloc buffer.Loc) (tcell.Style, b
 func (w *BufWindow) showCursor(x, y int, main bool) {
 	if w.active {
 		if main {
+			w.cursorX = x
+			w.cursorY = y
 			screen.ShowCursor(x, y)
 		} else {
 			screen.ShowFakeCursorMulti(x, y)
@@ -417,6 +423,9 @@ func (w *BufWindow) displayBuffer() {
 			}
 		}
 	}
+
+	w.cursorX = -1
+	w.cursorY = -1
 
 	lineNumStyle := config.DefStyle
 	if style, ok := config.Colorscheme["line-number"]; ok {
@@ -893,6 +902,42 @@ func (w *BufWindow) displayScrollBar() {
 	}
 }
 
+func (w *BufWindow) displayGhostText() {
+	text := w.Buf.InlineCompletion
+	if text == "" || w.cursorX < 0 {
+		return
+	}
+
+	style := config.DefStyle.Foreground(tcell.ColorGray)
+	if s, ok := config.Colorscheme["ai-completion"]; ok {
+		style = s
+	}
+
+	maxX := w.X + w.gutterOffset + w.bufWidth
+	x := w.cursorX + 1
+	y := w.cursorY
+
+	if x >= maxX || y < w.Y || y >= w.Y+w.bufHeight {
+		return
+	}
+
+	more := false
+	start := x
+
+	for _, r := range text {
+		if x >= maxX || r == '\n' || r == '\r' {
+			more = true
+			break
+		}
+		screen.SetContent(x, y, r, nil, style)
+		x++
+	}
+
+	if more && x < maxX && x > start {
+		screen.SetContent(x, y, '…', nil, style)
+	}
+}
+
 // Display displays the buffer and the statusline
 func (w *BufWindow) Display() {
 	w.updateDisplayInfo()
@@ -900,4 +945,5 @@ func (w *BufWindow) Display() {
 	w.displayStatusLine()
 	w.displayScrollBar()
 	w.displayBuffer()
+	w.displayGhostText()
 }

@@ -1,11 +1,15 @@
 package action
 
 import (
+	"context"
+	"log"
 	"strings"
+	"sync"
 	"time"
 
 	luar "layeh.com/gopher-luar"
 
+	"github.com/micro-editor/micro/v2/internal/ai"
 	"github.com/micro-editor/micro/v2/internal/buffer"
 	"github.com/micro-editor/micro/v2/internal/config"
 	"github.com/micro-editor/micro/v2/internal/display"
@@ -15,6 +19,35 @@ import (
 	"github.com/micro-editor/tcell/v2"
 	lua "github.com/yuin/gopher-lua"
 )
+
+// AIResultChan delivers AI completion results to the main event loop.
+// The main loop reads from this channel and applies the result on the main thread.
+var AIResultChan = make(chan func(), 16)
+
+var aiManager     *ai.Manager
+var aiManagerErr  error
+var aiManagerOnce sync.Once
+
+func getAIManager() *ai.Manager {
+	aiManagerOnce.Do(func() {
+		if !config.GetGlobalOption("aicomplete").(bool) {
+			return
+		}
+		provider := config.GetGlobalOption("aicompleteprovider").(string)
+		model := config.GetGlobalOption("aicompletemodel").(string)
+		baseURL := config.GetGlobalOption("aicompleteurl").(string)
+		debounce := config.GetGlobalOption("aicompletedebounce").(float64)
+		aiManager, aiManagerErr = ai.NewManager(provider, model, baseURL, debounce)
+		if aiManagerErr != nil {
+			log.Println("AI completion:", aiManagerErr)
+			InfoBar.Error("AI completion: ", aiManagerErr.Error())
+		}
+	})
+	if aiManagerErr != nil {
+		return nil
+	}
+	return aiManager
+}
 
 type BufAction any
 
@@ -254,6 +287,9 @@ type BufPane struct {
 	// since we may not know the window geometry yet. In such case we finish
 	// its initialization a bit later, after the initial resize.
 	initialized bool
+
+	// AI inline completion state
+	aiCancel context.CancelFunc
 }
 
 func newBufPane(buf *buffer.Buffer, win display.BWindow, tab *Tab) *BufPane {
@@ -345,6 +381,7 @@ func (h *BufPane) resetMouse() {
 
 // OpenBuffer opens the given buffer in this pane.
 func (h *BufPane) OpenBuffer(b *buffer.Buffer) {
+	h.dismissAICompletion()
 	h.Buf.Close()
 	h.Buf = b
 	h.BWindow.SetBuffer(b)
@@ -355,6 +392,100 @@ func (h *BufPane) OpenBuffer(b *buffer.Buffer) {
 	// pressed when the editor is opened
 	h.resetMouse()
 	h.lastClickTime = time.Time{}
+}
+
+func (h *BufPane) dismissAICompletion() {
+	h.Buf.InlineCompletion = ""
+	if h.aiCancel != nil {
+		h.aiCancel()
+		h.aiCancel = nil
+	}
+}
+
+func (h *BufPane) triggerAICompletion() {
+	mgr := getAIManager()
+	if mgr == nil {
+		if aiManagerErr != nil {
+			InfoBar.Error("AI completion: ", aiManagerErr.Error())
+		}
+		return
+	}
+
+	if !config.GetGlobalOption("aicomplete").(bool) {
+		return
+	}
+
+	h.dismissAICompletion()
+	InfoBar.Message("")
+
+	before := h.Buf.TextBeforeCursor()
+	after := h.Buf.TextAfterCursor()
+	fileType := h.Buf.Settings["filetype"].(string)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	h.aiCancel = cancel
+
+	mgr.RequestDelayed(ai.Request{
+		BeforeCursor: before,
+		AfterCursor:  after,
+		FileType:     fileType,
+		FileName:     h.Buf.AbsPath,
+	}, func(resp *ai.Response, err error) {
+		if ctx.Err() != nil {
+			return
+		}
+		if err != nil {
+			AIResultChan <- func() {
+				InfoBar.Message("AI: ", err.Error())
+			}
+			return
+		}
+		AIResultChan <- func() {
+			h.Buf.InlineCompletion = resp.Text
+			screen.Redraw()
+		}
+	})
+}
+
+func (h *BufPane) triggerAICompletionNow() {
+	mgr := getAIManager()
+	if mgr == nil {
+		if aiManagerErr != nil {
+			InfoBar.Error("AI completion: ", aiManagerErr.Error())
+		}
+		return
+	}
+	if !config.GetGlobalOption("aicomplete").(bool) {
+		return
+	}
+	h.dismissAICompletion()
+	InfoBar.Message("")
+
+	resp, err := mgr.RequestNow(ai.Request{
+		BeforeCursor: h.Buf.TextBeforeCursor(),
+		AfterCursor:  h.Buf.TextAfterCursor(),
+		FileType:     h.Buf.Settings["filetype"].(string),
+		FileName:     h.Buf.AbsPath,
+	})
+	if err != nil {
+		InfoBar.Message("AI: ", err.Error())
+		return
+	}
+	if resp != nil {
+		h.Buf.InlineCompletion = resp.Text
+		screen.Redraw()
+	}
+}
+
+func (h *BufPane) acceptAICompletion() bool {
+	text := h.Buf.InlineCompletion
+	if text == "" {
+		return false
+	}
+	h.dismissAICompletion()
+	h.Buf.Insert(h.Cursor.Loc, text)
+	h.Relocate()
+	return true
 }
 
 // GotoLoc moves the cursor to a new location and adjusts the view accordingly.
@@ -556,6 +687,12 @@ func (h *BufPane) execAction(action BufAction, name string, te *tcell.EventMouse
 	if name != "Autocomplete" && name != "CycleAutocompleteBack" {
 		h.Buf.HasSuggestions = false
 	}
+	if name != "Autocomplete" && name != "CycleAutocompleteBack" &&
+		name != "Escape" && name != "InsertTab" && name != "ManualTrigger" &&
+		name != "IndentSelection" && name != "OutdentSelection" &&
+		name != "OutdentLine" {
+		h.dismissAICompletion()
+	}
 
 	if !h.PluginCB("pre"+name, te) {
 		return false
@@ -645,6 +782,7 @@ func (h *BufPane) DoRuneInsert(r rune) {
 		h.Relocate()
 		h.PluginCB("onRune", string(r))
 	}
+	h.triggerAICompletion()
 }
 
 // VSplitIndex opens the given buffer in a vertical split on the given side.
@@ -851,6 +989,7 @@ var BufKeyActions = map[string]BufKeyAction{
 	"Deselect":                  (*BufPane).Deselect,
 	"ClearInfo":                 (*BufPane).ClearInfo,
 	"None":                      (*BufPane).None,
+	"ManualTrigger":             (*BufPane).ManualTrigger,
 
 	// This was changed to InsertNewline but I don't want to break backwards compatibility
 	"InsertEnter": (*BufPane).InsertNewline,
