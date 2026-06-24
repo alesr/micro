@@ -697,22 +697,46 @@ func (h *BufPane) InsertNewline() bool {
 	ws := util.GetLeadingWhitespace(h.Buf.LineBytes(h.Cursor.Y))
 	cx := h.Cursor.X
 	h.Buf.Insert(h.Cursor.Loc, "\n")
-	// h.Cursor.Right()
 
 	if h.Buf.Settings["autoindent"].(bool) {
 		if cx < len(ws) {
 			ws = ws[0:cx]
 		}
 		h.Buf.Insert(h.Cursor.Loc, string(ws))
-		// for i := 0; i < len(ws); i++ {
-		// 	h.Cursor.Right()
-		// }
 
-		// Remove the whitespaces if keepautoindent setting is off
 		if util.IsSpacesOrTabs(h.Buf.LineBytes(h.Cursor.Y-1)) && !h.Buf.Settings["keepautoindent"].(bool) {
 			line := h.Buf.LineBytes(h.Cursor.Y - 1)
 			h.Buf.Remove(buffer.Loc{X: 0, Y: h.Cursor.Y - 1}, buffer.Loc{X: util.CharacterCount(line), Y: h.Cursor.Y - 1})
 		}
+	}
+	h.Cursor.StoreVisualX()
+	h.Relocate()
+	return true
+}
+
+// InsertLineBelow inserts a newline after the current line (VSCode Ctrl+Enter)
+func (h *BufPane) InsertLineBelow() bool {
+	h.Cursor.Deselect(true)
+	h.Cursor.End()
+	h.Buf.Insert(h.Cursor.Loc, "\n")
+	if h.Buf.Settings["autoindent"].(bool) {
+		ws := util.GetLeadingWhitespace(h.Buf.LineBytes(h.Cursor.Y))
+		h.Buf.Insert(h.Cursor.Loc, string(ws))
+	}
+	h.Cursor.StoreVisualX()
+	h.Relocate()
+	return true
+}
+
+// InsertLineAbove inserts a newline before the current line (VSCode Ctrl+Shift+Enter)
+func (h *BufPane) InsertLineAbove() bool {
+	h.Cursor.Deselect(true)
+	h.Cursor.Start()
+	h.Buf.Insert(h.Cursor.Loc, "\n")
+	h.Cursor.Up()
+	if h.Buf.Settings["autoindent"].(bool) {
+		ws := util.GetLeadingWhitespace(h.Buf.LineBytes(h.Cursor.Y))
+		h.Buf.Insert(h.Cursor.Loc, string(ws))
 	}
 	h.Cursor.StoreVisualX()
 	h.Relocate()

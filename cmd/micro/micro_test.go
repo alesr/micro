@@ -151,7 +151,7 @@ func injectString(str string) {
 }
 
 func openFile(file string) {
-	injectKey(tcell.KeyCtrlE, rune(tcell.KeyCtrlE), tcell.ModCtrl)
+	injectKey(tcell.KeyF8, 0, tcell.ModNone)
 	injectString(fmt.Sprintf("open %s", file))
 	injectKey(tcell.KeyEnter, rune(tcell.KeyEnter), tcell.ModNone)
 }
@@ -300,7 +300,7 @@ func TestSearchAndReplace(t *testing.T) {
 		t.Fatalf("Could not find buffer %s", file)
 	}
 
-	injectKey(tcell.KeyCtrlE, rune(tcell.KeyCtrlE), tcell.ModCtrl)
+	injectKey(tcell.KeyF8, 0, tcell.ModNone)
 	injectString(fmt.Sprintf("replaceall %s %s", "foo", "test_string"))
 	injectKey(tcell.KeyEnter, rune(tcell.KeyEnter), tcell.ModNone)
 
@@ -313,7 +313,7 @@ func TestSearchAndReplace(t *testing.T) {
 
 	assert.Equal(t, srTest2, string(data))
 
-	injectKey(tcell.KeyCtrlE, rune(tcell.KeyCtrlE), tcell.ModCtrl)
+	injectKey(tcell.KeyF8, 0, tcell.ModNone)
 	injectString(fmt.Sprintf("replace %s %s", "string", "foo"))
 	injectKey(tcell.KeyEnter, rune(tcell.KeyEnter), tcell.ModNone)
 	injectString("ynyny")
